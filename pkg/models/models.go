@@ -1,7 +1,7 @@
 package models
 
 type Magazine struct {
-	Id   int
-	Name string
-	City string
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+	City string `json:"city"`
 }

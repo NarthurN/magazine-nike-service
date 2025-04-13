@@ -88,11 +88,17 @@ func (a *API) addMagazine(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
+
 	id, err := a.Magazines.Insert(magazine.Name, magazine.City)
 	if err != nil {
 		a.LogError.Printf("func addMagazine, a.Magazines.Insert %v", err)
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
+	}
+
+	a.LogInfo.Println("Invalidation of cache")
+	if err := a.Cache.Del(r.Context(), magazine.City).Err(); err != nil {
+		a.LogError.Printf("func addMagazine, cache.Del %v", err)
 	}
 
 	message := fmt.Sprintf("Magazine %s in city %s added to DB by id %d", magazine.Name, magazine.City, id)

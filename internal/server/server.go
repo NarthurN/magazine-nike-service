@@ -10,6 +10,7 @@ import (
 	"os"
 
 	_ "github.com/lib/pq"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -38,6 +39,21 @@ func initRedis() *redis.Client {
 	}
 
 	return rdb
+}
+
+func initRabitMQ() *amqp.Channel {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		panic(err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println("RabbitMQ initialized")
+	return ch
 }
 
 func initDb() *sql.DB {

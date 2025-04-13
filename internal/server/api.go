@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"microservice1/internal/helpers"
 	"microservice1/pkg/models"
 	"microservice1/pkg/models/postgre"
 	"net/http"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,6 +19,7 @@ type API struct {
 	LogError  *log.Logger
 	Magazines *postgre.MagazineModel
 	Cache     *redis.Client
+	Broker    *amqp.Channel
 }
 
 func NewAPI() *API {
@@ -25,6 +28,7 @@ func NewAPI() *API {
 		LogError:  initLoggerError(),
 		Magazines: &postgre.MagazineModel{DB: initDb()},
 		Cache:     initRedis(),
+		Broker:    initRabitMQ(),
 	}
 }
 
@@ -49,6 +53,10 @@ func (a *API) getMagazinesByCity(w http.ResponseWriter, r *http.Request) {
 	} else {
 		a.LogInfo.Println("get from cache city", city)
 		w.Header().Set("Content-Type", "application/json")
+
+		//rabbitMQ publish
+		helpers.PublishNotification(a.Broker, city)
+
 		w.Write([]byte(magazinesCached))
 		return
 	}
@@ -74,6 +82,11 @@ func (a *API) getMagazinesByCity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	a.LogInfo.Println("get from cache city and publish a message", city)
+
+	//rabbitMQ publish
+	helpers.PublishNotification(a.Broker, city)
+
 	if err := json.NewEncoder(w).Encode(magazines); err != nil {
 		a.LogError.Printf("func getMagazinesByCity, json.Encode %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

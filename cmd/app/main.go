@@ -12,6 +12,9 @@ import (
 func main() {
 	api := server.NewAPI()
 	defer api.Magazines.DB.Close()
+	defer api.Broker.Close()
+	defer api.Cache.Close()
+	
 	server := server.InitServer(api)
 
 	// Graceful Shutdown

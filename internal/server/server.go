@@ -10,6 +10,7 @@ import (
 	"os"
 
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 func initLoggerInfo() *log.Logger {
@@ -20,6 +21,23 @@ func initLoggerInfo() *log.Logger {
 func initLoggerError() *log.Logger {
 	log.Println("LoggerError initialized")
 	return log.New(os.Stdout, "ERROR", log.Ldate|log.Ltime|log.Llongfile)
+}
+
+func initRedis() *redis.Client {
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
+	pong, err := rdb.Ping(context.Background()).Result()
+	if err != nil {
+		panic(err)
+	}
+
+	if pong == "PONG" {
+		log.Println("Redis initialized")
+	}
+
+	return rdb
 }
 
 func initDb() *sql.DB {

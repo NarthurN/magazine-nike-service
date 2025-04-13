@@ -7,12 +7,16 @@ import (
 	"microservice1/pkg/models"
 	"microservice1/pkg/models/postgre"
 	"net/http"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type API struct {
 	LogInfo   *log.Logger
 	LogError  *log.Logger
 	Magazines *postgre.MagazineModel
+	Cache     *redis.Client
 }
 
 func NewAPI() *API {
@@ -20,6 +24,7 @@ func NewAPI() *API {
 		LogInfo:   initLoggerInfo(),
 		LogError:  initLoggerError(),
 		Magazines: &postgre.MagazineModel{DB: initDb()},
+		Cache:     initRedis(),
 	}
 }
 
@@ -32,6 +37,24 @@ func (a *API) routes() *http.ServeMux {
 
 func (a *API) getMagazinesByCity(w http.ResponseWriter, r *http.Request) {
 	city := r.PathValue("city")
+
+	//Get info from cache first
+	magazinesCached, err := a.Cache.Get(r.Context(), city).Result()
+	if err == redis.Nil {
+		a.LogInfo.Println("no cached data with city", city)
+	} else if err != nil {
+		a.LogError.Printf("func getMagazinesByCity, a.Cache.Get %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	} else {
+		a.LogInfo.Println("get from cache city", city)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(magazinesCached))
+		return
+	}
+
+	// if in cache doesn't exists then get from db
+	a.LogInfo.Println("get from DB", city)
 	magazines, err := a.Magazines.Get(city)
 	if err != nil {
 		a.LogError.Printf("func getMagazinesByCity, a.Magazines.Get %v", err)
@@ -39,11 +62,22 @@ func (a *API) getMagazinesByCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	// add magazines in cache
+	jsonData, err := json.Marshal(magazines)
+	if err != nil {
+		a.LogError.Printf("func getMagazinesByCity, json.Marshal %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if err := a.Cache.Set(r.Context(), city, jsonData, 5*time.Minute).Err(); err != nil {
+		a.LogError.Printf("func getMagazinesByCity, a.Cache.Set %v", err)
+	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(magazines); err != nil {
 		a.LogError.Printf("func getMagazinesByCity, json.Encode %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 }
 
